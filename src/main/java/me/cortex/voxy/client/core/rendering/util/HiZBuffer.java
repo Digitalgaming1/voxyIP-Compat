@@ -67,50 +67,69 @@ public class HiZBuffer {
         this.fb.bind(GL_DEPTH_ATTACHMENT, this.texture, 0).verify();
     }
 
-    public void buildMipChain(int srcDepthTex, int width, int height) {
-        if (this.width != Integer.highestOneBit(width) || this.height != Integer.highestOneBit(height)) {
-            if (this.texture != null) {
-                this.texture.free();
-                this.texture = null;
-            }
-            this.alloc(Integer.highestOneBit(width), Integer.highestOneBit(height));
-        }
-        glBindVertexArray(GlVertexArray.STATIC_VAO);
-        int boundFB = GL11.glGetInteger(GL_DRAW_FRAMEBUFFER_BINDING);
-        this.hiz.bind();
-        glBindFramebuffer(GL_FRAMEBUFFER, this.fb.id);
-
-        glDepthFunc(GL_ALWAYS);
-        glDepthMask(true);
-        glEnable(GL_DEPTH_TEST);
-
-
-        glBindTextureUnit(0, srcDepthTex);
-        glBindSampler(0, this.sampler);
-        glUniform1i(0, 0);
-        int cw = this.width;
-        int ch = this.height;
-        for (int i = 0; i < this.levels; i++) {
-            this.fb.bind(GL_DEPTH_ATTACHMENT, this.texture, i);
-            glViewport(0, 0, cw, ch); cw = Math.max(cw/2, 1); ch = Math.max(ch/2, 1);
-            glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-            glTextureBarrier();
-            glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT|GL_TEXTURE_FETCH_BARRIER_BIT);
-            glTextureParameteri(this.texture.id, GL_TEXTURE_BASE_LEVEL, i);
-            glTextureParameteri(this.texture.id, GL_TEXTURE_MAX_LEVEL, i);
-            if (i==0) {
-                glBindTextureUnit(0, this.texture.id);
-            }
-        }
-        glTextureParameteri(this.texture.id, GL_TEXTURE_BASE_LEVEL, 0);
-        glTextureParameteri(this.texture.id, GL_TEXTURE_MAX_LEVEL, 1000);//TODO: CHECK IF ITS -1 or -0
-
-        glDepthFunc(GL_LEQUAL);
-        glDisable(GL_DEPTH_TEST);
-        glBindFramebuffer(GL_FRAMEBUFFER, boundFB);
-        glViewport(0, 0, width, height);
-        glBindVertexArray(0);
+public void buildMipChain(int srcDepthTex, int width, int height) {
+    if (srcDepthTex <= 0) {
+        // Invalid source texture, skip building mip chain
+        System.err.println("[Voxy] HiZBuffer skipped: invalid source depth texture");
+        return;
     }
+
+    // Allocate HiZ texture if needed
+    if (this.width != Integer.highestOneBit(width) || this.height != Integer.highestOneBit(height)) {
+        if (this.texture != null) {
+            this.texture.free();
+            this.texture = null;
+        }
+        this.alloc(Integer.highestOneBit(width), Integer.highestOneBit(height));
+        if (this.texture == null) {
+            System.err.println("[Voxy] HiZBuffer skipped: allocation failed");
+            return;
+        }
+    }
+
+    glBindVertexArray(GlVertexArray.STATIC_VAO);
+    int boundFB = GL11.glGetInteger(GL_DRAW_FRAMEBUFFER_BINDING);
+    this.hiz.bind();
+    glBindFramebuffer(GL_FRAMEBUFFER, this.fb.id);
+
+    glDepthFunc(GL_ALWAYS);
+    glDepthMask(true);
+    glEnable(GL_DEPTH_TEST);
+
+    glBindTextureUnit(0, srcDepthTex);
+    glBindSampler(0, this.sampler);
+    glUniform1i(0, 0);
+
+    int cw = this.width;
+    int ch = this.height;
+
+    for (int i = 0; i < this.levels; i++) {
+        if (this.texture == null) break; // safety
+        this.fb.bind(GL_DEPTH_ATTACHMENT, this.texture, i);
+        glViewport(0, 0, cw, ch);
+        cw = Math.max(cw/2, 1);
+        ch = Math.max(ch/2, 1);
+        glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+        glTextureBarrier();
+        glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+        glTextureParameteri(this.texture.id, GL_TEXTURE_BASE_LEVEL, i);
+        glTextureParameteri(this.texture.id, GL_TEXTURE_MAX_LEVEL, i);
+        if (i == 0) {
+            glBindTextureUnit(0, this.texture.id);
+        }
+    }
+
+    if (this.texture != null) {
+        glTextureParameteri(this.texture.id, GL_TEXTURE_BASE_LEVEL, 0);
+        glTextureParameteri(this.texture.id, GL_TEXTURE_MAX_LEVEL, 1000); // TODO: check -1 or 0
+    }
+
+    glDepthFunc(GL_LEQUAL);
+    glDisable(GL_DEPTH_TEST);
+    glBindFramebuffer(GL_FRAMEBUFFER, boundFB);
+    glViewport(0, 0, width, height);
+    glBindVertexArray(0);
+}
 
     public void free() {
         this.fb.free();
@@ -122,9 +141,15 @@ public class HiZBuffer {
         this.hiz.free();
     }
 
-    public int getHizTextureId() {
-        return this.texture.id;
+public int getHizTextureId() {
+    if (this.texture == null) {
+        // Either return 0 (skip) or log and skip rendering
+        System.err.println("[Voxy][HiZ] Texture missing, returning 0 to skip HiZ usage");
+        return 0;
     }
+    return this.texture.id;
+}
+
 
     public int getPackedLevels() {
         return (this.width<<16)|this.height;//+1
