@@ -9,6 +9,7 @@ import static org.lwjgl.opengl.GL11.GL_NEAREST;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_MAG_FILTER;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_MIN_FILTER;
 import static org.lwjgl.opengl.GL11C.GL_DEPTH;
+import static org.lwjgl.opengl.GL11C.GL_STENCIL;
 import static org.lwjgl.opengl.GL14.GL_DEPTH_COMPONENT24;
 import static org.lwjgl.opengl.GL30C.*;
 
@@ -26,6 +27,9 @@ public class DepthFramebuffer {
     }
 
     public boolean resize(int width, int height) {
+    width = Math.max(1, width);
+    height = Math.max(1, height);
+    
         if (this.depthBuffer == null || this.depthBuffer.getWidth() != width || this.depthBuffer.getHeight() != height) {
             if (this.depthBuffer != null) {
                 this.depthBuffer.free();
