@@ -55,7 +55,9 @@ import static org.lwjgl.opengl.GL43C.GL_SHADER_STORAGE_BUFFER_BINDING;
 
 public class VoxyRenderSystem {
     private final WorldEngine worldIn;
-
+    
+    // Thread-local to track which world is currently being rendered (for Immersive Portals support)
+    private static final ThreadLocal<WorldEngine> CURRENT_RENDERING_WORLD = new ThreadLocal<>();
 
     private final ModelBakerySubsystem modelService;
     private final RenderGenerationService renderGen;
@@ -117,7 +119,7 @@ public class VoxyRenderSystem {
                 this.nodeManager.start();
             }
 
-            this.pipeline = RenderPipelineFactory.createPipeline(this.nodeManager, this.nodeCleaner, this.traversal, this::frexStillHasWork);
+            this.pipeline = RenderPipelineFactory.createPipeline(this.worldIn, this.nodeManager, this.nodeCleaner, this.traversal, this::frexStillHasWork);
             this.pipeline.setupExtraModelBakeryData(this.modelService);//Configure the model service
             var sectionRenderer = backendFactory.create(this.pipeline, this.modelService.getStore(), this.geometryData);
             this.pipeline.setSectionRenderer(sectionRenderer);
@@ -209,11 +211,39 @@ public class VoxyRenderSystem {
         return viewport;
     }
 
+    /**
+     * Gets the world currently being rendered on this thread.
+     * Used by VoxySamplers to determine which pipeline to use for Immersive Portals support.
+     */
+    public static WorldEngine getCurrentRenderingWorld() {
+        return CURRENT_RENDERING_WORLD.get();
+    }
+
     public void renderOpaque(Viewport<?> viewport) {
         if (viewport == null) {
             return;
         }
-
+        
+        // Debug logging for Immersive Portals
+        Logger.info("VoxyRenderSystem.renderOpaque() called for world: " + this.worldIn);
+        
+        // Set this pipeline as active for sampler access (Immersive Portals support)
+        // NOTE: We intentionally do NOT clear the thread-local after rendering.
+        // The samplers may be called AFTER renderOpaque() returns, so we need to
+        // keep the thread-local set. The next render call will overwrite it.
+        if (this.pipeline instanceof IrisVoxyRenderPipeline irisPipeline) {
+            Logger.info("Setting active pipeline for world: " + this.worldIn);
+            irisPipeline.setActive();
+        }
+        
+        renderOpaqueInternal(viewport);
+        
+        // Note: We do NOT clear the thread-local here because Iris samplers may be
+        // called after this method returns. The thread-local will be overwritten
+        // by the next render call.
+    }
+    
+    private void renderOpaqueInternal(Viewport<?> viewport) {
         TimingStatistics.resetSamplers();
 
         long startTime = System.nanoTime();

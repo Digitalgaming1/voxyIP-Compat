@@ -10,6 +10,7 @@ import me.cortex.voxy.client.core.IrisVoxyRenderPipeline;
 import me.cortex.voxy.client.mixin.iris.CustomUniformsAccessor;
 import me.cortex.voxy.client.mixin.iris.IrisRenderingPipelineAccessor;
 import me.cortex.voxy.common.Logger;
+import me.cortex.voxy.common.world.WorldEngine;
 import net.irisshaders.iris.gl.buffer.ShaderStorageBufferHolder;
 import net.irisshaders.iris.gl.image.ImageHolder;
 import net.irisshaders.iris.gl.sampler.GlSampler;
@@ -29,6 +30,7 @@ import org.joml.*;
 import org.lwjgl.system.MemoryUtil;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.*;
 import java.util.stream.Collectors;
 
@@ -38,6 +40,14 @@ import static org.lwjgl.opengl.GL33C.glBindSampler;
 import static org.lwjgl.opengl.GL43C.GL_SHADER_STORAGE_BUFFER;
 
 public class IrisVoxyRenderPipelineData {
+    // Map of WorldEngine to pipeline to support multiple dimensions (Immersive Portals)
+    public final Map<WorldEngine, IrisVoxyRenderPipeline> pipelines = new ConcurrentHashMap<>();
+    
+    // Currently active pipeline for rendering (used by samplers for Immersive Portals)
+    public volatile IrisVoxyRenderPipeline activePipeline;
+    
+    // Deprecated: kept for backward compatibility during transition
+    @Deprecated
     public IrisVoxyRenderPipeline thePipeline;
     public final int[] opaqueDrawTargets;
     public final int[] translucentDrawTargets;

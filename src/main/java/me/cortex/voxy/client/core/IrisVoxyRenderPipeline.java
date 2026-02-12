@@ -11,6 +11,7 @@ import me.cortex.voxy.client.core.rendering.section.backend.AbstractSectionRende
 import me.cortex.voxy.client.core.rendering.util.DepthFramebuffer;
 import me.cortex.voxy.client.core.rendering.util.UploadStream;
 import me.cortex.voxy.client.iris.IrisVoxyRenderPipelineData;
+import me.cortex.voxy.common.world.WorldEngine;
 import net.irisshaders.iris.shaderpack.materialmap.WorldRenderingSettings;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL30;
@@ -25,18 +26,21 @@ import static org.lwjgl.opengl.GL45C.*;
 
 public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
     private final IrisVoxyRenderPipelineData data;
+    private final WorldEngine world;
     private final FullscreenBlit depthBlit = new FullscreenBlit("voxy:post/blit_texture_depth_cutout.frag");
     public final DepthFramebuffer fb = new DepthFramebuffer(GL_DEPTH24_STENCIL8);
     public final DepthFramebuffer fbTranslucent = new DepthFramebuffer(GL_DEPTH24_STENCIL8);
 
     private final GlBuffer shaderUniforms;
 
-    public IrisVoxyRenderPipeline(IrisVoxyRenderPipelineData data, AsyncNodeManager nodeManager, NodeCleaner nodeCleaner, HierarchicalOcclusionTraverser traversal, BooleanSupplier frexSupplier) {
+    public IrisVoxyRenderPipeline(IrisVoxyRenderPipelineData data, WorldEngine world, AsyncNodeManager nodeManager, NodeCleaner nodeCleaner, HierarchicalOcclusionTraverser traversal, BooleanSupplier frexSupplier) {
         super(nodeManager, nodeCleaner, traversal, frexSupplier);
         this.data = data;
-        if (this.data.thePipeline != null) {
-            throw new IllegalStateException("Pipeline data already bound");
-        }
+        this.world = world;
+        
+        // Register this pipeline in the map for its world (supports multiple dimensions for Immersive Portals)
+        this.data.pipelines.put(world, this);
+        // Also set the legacy field for backward compatibility
         this.data.thePipeline = this;
 
         //Bind the drawbuffers
@@ -73,10 +77,16 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
 
     @Override
     public void free() {
-        if (this.data.thePipeline != this) {
-            throw new IllegalStateException();
+        // Remove this pipeline from the map
+        var removed = this.data.pipelines.remove(this.world);
+        if (removed != this) {
+            throw new IllegalStateException("Pipeline was not registered for this world or was already removed");
         }
-        this.data.thePipeline = null;
+        
+        // Also clear the legacy field if this was the last pipeline
+        if (this.data.pipelines.isEmpty()) {
+            this.data.thePipeline = null;
+        }
 
         this.depthBlit.delete();
         this.fb.free();
@@ -87,6 +97,36 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
         }
 
         super.free0();
+    }
+    
+    // Thread-local stack to track which pipeline is currently rendering (for Immersive Portals)
+    private static final ThreadLocal<IrisVoxyRenderPipeline> CURRENT_PIPELINE = new ThreadLocal<>();
+    
+    /**
+     * Sets this pipeline as the active one for sampler access.
+     * Called by VoxyRenderSystem before rendering.
+     */
+    public void setActive() {
+        CURRENT_PIPELINE.set(this);
+    }
+    
+    /**
+     * Clears this pipeline as the active one.
+     * Called by VoxyRenderSystem after rendering.
+     */
+    public void clearActive() {
+        // Only clear if we're still the current pipeline
+        if (CURRENT_PIPELINE.get() == this) {
+            CURRENT_PIPELINE.remove();
+        }
+    }
+    
+    /**
+     * Gets the currently active pipeline for this thread.
+     * Used by VoxySamplers to determine which depth texture to use.
+     */
+    public static IrisVoxyRenderPipeline getCurrentPipeline() {
+        return CURRENT_PIPELINE.get();
     }
 
     @Override
