@@ -22,17 +22,33 @@ public class DepthFramebuffer {
         this.depthType = depthType;
     }
 
-    public boolean resize(int width, int height) {
-        if (this.depthBuffer == null || this.depthBuffer.getWidth() != width || this.depthBuffer.getHeight() != height) {
-            if (this.depthBuffer != null) {
-                this.depthBuffer.free();
-            }
-            this.depthBuffer = new GlTexture().store(this.depthType, 1, width, height);
-            this.framebuffer.bind(this.depthType == GL_DEPTH24_STENCIL8?GL_DEPTH_STENCIL_ATTACHMENT: GL_DEPTH_ATTACHMENT, this.depthBuffer).verify();
-            return true;
+public boolean resize(int width, int height) {
+    // Ensure width and height are >= 1 to avoid GL errors
+    width = Math.max(1, width);
+    height = Math.max(1, height);
+
+    if (this.depthBuffer == null || this.depthBuffer.getWidth() != width || this.depthBuffer.getHeight() != height) {
+        if (this.depthBuffer != null) {
+            this.depthBuffer.free();
         }
-        return false;
+
+        try {
+            this.depthBuffer = new GlTexture().store(this.depthType, 1, width, height);
+            this.framebuffer
+                    .bind(this.depthType == GL_DEPTH24_STENCIL8 ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT, this.depthBuffer)
+                    .verify();
+        } catch (IllegalStateException e) {
+            // Warn but don't crash — framebuffer is invalid (likely due to IP or tiny viewport)
+            System.err.println("[Voxy] DepthFramebuffer resize failed: " + e.getMessage());
+            this.depthBuffer = null;
+            return false;
+        }
+
+        return true;
     }
+    return false;
+}
+
 
     public void clear() {
         this.clear(1.0f);
