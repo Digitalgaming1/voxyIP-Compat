@@ -26,6 +26,7 @@ public class VoxySamplers {
             // If we have multiple pipelines but no current pipeline set, something is wrong
             // Return null to avoid using the wrong pipeline
             if (pipeData.pipelines.size() > 1) {
+                me.cortex.voxy.common.Logger.warn("Multiple pipelines exist but no current pipeline set!");
                 return null;
             }
             return pipeData.pipelines.values().iterator().next();
@@ -50,38 +51,46 @@ public class VoxySamplers {
             samplers.addDynamicSampler(TextureType.TEXTURE_2D, () -> {
                 var pipeData = ((IGetIrisVoxyPipelineData)pipeline).voxy$getPipelineData();
                 if (pipeData == null) {
+                    me.cortex.voxy.common.Logger.info("VoxySamplers: pipeData is null");
                     return 0;
                 }
                 
                 var voxyPipeline = getCurrentPipeline(pipeData);
                 if (voxyPipeline == null) {
+                    me.cortex.voxy.common.Logger.info("VoxySamplers: voxyPipeline is null, current thread pipeline: " + IrisVoxyRenderPipeline.getCurrentPipeline());
                     return 0;
                 }
 
                 //In theory the first frame could be null
                 var dt = voxyPipeline.fb.getDepthTex();
                 if (dt == null) {
+                    me.cortex.voxy.common.Logger.info("VoxySamplers: depth tex is null");
                     return 0;
                 }
+                me.cortex.voxy.common.Logger.info("VoxySamplers: returning depth tex id: " + dt.id + " for pipeline: " + voxyPipeline);
                 return dt.id;
             }, null, opaqueNames);
 
             samplers.addDynamicSampler(TextureType.TEXTURE_2D, () -> {
                 var pipeData = ((IGetIrisVoxyPipelineData)pipeline).voxy$getPipelineData();
                 if (pipeData == null) {
+                    me.cortex.voxy.common.Logger.info("VoxySamplers translucent: pipeData is null");
                     return 0;
                 }
                 
                 var voxyPipeline = getCurrentPipeline(pipeData);
                 if (voxyPipeline == null) {
+                    me.cortex.voxy.common.Logger.info("VoxySamplers translucent: voxyPipeline is null, current thread pipeline: " + IrisVoxyRenderPipeline.getCurrentPipeline());
                     return 0;
                 }
                 
                 //In theory the first frame could be null
                 var dt = voxyPipeline.fbTranslucent.getDepthTex();
                 if (dt == null) {
+                    me.cortex.voxy.common.Logger.info("VoxySamplers translucent: depth tex is null");
                     return 0;
                 }
+                me.cortex.voxy.common.Logger.info("VoxySamplers translucent: returning depth tex id: " + dt.id + " for pipeline: " + voxyPipeline);
                 return dt.id;
             }, null, translucentNames);
         }

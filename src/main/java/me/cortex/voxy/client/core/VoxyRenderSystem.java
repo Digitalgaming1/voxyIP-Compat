@@ -224,11 +224,15 @@ public class VoxyRenderSystem {
             return;
         }
         
+        // Debug logging for Immersive Portals
+        Logger.info("VoxyRenderSystem.renderOpaque() called for world: " + this.worldIn);
+        
         // Set this pipeline as active for sampler access (Immersive Portals support)
         // NOTE: We intentionally do NOT clear the thread-local after rendering.
         // The samplers may be called AFTER renderOpaque() returns, so we need to
         // keep the thread-local set. The next render call will overwrite it.
         if (this.pipeline instanceof IrisVoxyRenderPipeline irisPipeline) {
+            Logger.info("Setting active pipeline for world: " + this.worldIn);
             irisPipeline.setActive();
         }
         
