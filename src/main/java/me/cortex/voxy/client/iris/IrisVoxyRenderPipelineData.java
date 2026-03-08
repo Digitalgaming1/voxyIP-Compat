@@ -38,7 +38,6 @@ import static org.lwjgl.opengl.GL33C.glBindSampler;
 import static org.lwjgl.opengl.GL43C.GL_SHADER_STORAGE_BUFFER;
 
 public class IrisVoxyRenderPipelineData {
-    public IrisVoxyRenderPipeline thePipeline;
     public final int[] opaqueDrawTargets;
     public final int[] translucentDrawTargets;
     private final String opaquePatch;
