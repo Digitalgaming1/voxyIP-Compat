@@ -2,6 +2,7 @@ package me.cortex.voxy.client.core;
 
 import com.mojang.blaze3d.platform.GlConst;
 import com.mojang.blaze3d.platform.GlStateManager;
+import net.minecraft.client.Minecraft;
 import me.cortex.voxy.client.TimingStatistics;
 import me.cortex.voxy.client.VoxyClient;
 import me.cortex.voxy.client.config.VoxyConfig;
@@ -507,5 +508,9 @@ public class VoxyRenderSystem {
 
     public WorldEngine getEngine() {
         return this.worldIn;
+    }
+
+    public AbstractRenderPipeline getPipeline() {
+        return this.pipeline;
     }
 }
