@@ -34,6 +34,8 @@ import me.cortex.voxy.common.thread.ServiceManager;
 import me.cortex.voxy.common.world.WorldEngine;
 import me.cortex.voxy.commonImpl.VoxyCommon;
 import me.jellysquid.mods.sodium.client.render.chunk.ChunkRenderMatrices;
+import net.irisshaders.iris.Iris;
+import net.irisshaders.iris.pipeline.WorldRenderingPipeline;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import org.joml.Matrix4f;
@@ -69,11 +71,13 @@ public class VoxyRenderSystem {
 
 
     private final RenderDistanceTracker renderDistanceTracker;
-    public final ChunkBoundRenderer chunkBoundRenderer;
+    public ChunkBoundRenderer chunkBoundRenderer;
 
-    private final ViewportSelector<?> viewportSelector;
+    private ViewportSelector<?> viewportSelector;
 
-    private final AbstractRenderPipeline pipeline;
+    private AbstractRenderPipeline pipeline;
+    private WorldRenderingPipeline lastIrisPipeline;
+    private final Object pipelineLock = new Object();
 
     // Fog parameters captured before modification by MixinFogRenderer, for Voxy's own fog pass
     private float capturedFogStart;
@@ -152,6 +156,11 @@ public class VoxyRenderSystem {
             var sectionRenderer = backendFactory.create(this.pipeline, this.modelService.getStore(), this.geometryData);
             this.pipeline.setSectionRenderer(sectionRenderer);
             this.viewportSelector = new ViewportSelector<>(sectionRenderer::createViewport);
+            
+            // Initialize the last Iris pipeline reference
+            if (IrisUtil.IRIS_INSTALLED && IrisUtil.SHADER_SUPPORT) {
+                this.lastIrisPipeline = Iris.getPipelineManager().getPipelineNullable();
+            }
 
             {
                 int minSec = Minecraft.getInstance().level.getMinSection() >> 5;
@@ -237,10 +246,80 @@ public class VoxyRenderSystem {
         return viewport;
     }
 
+    private boolean checkAndUpdatePipeline() {
+        if (!IrisUtil.IRIS_INSTALLED || !IrisUtil.SHADER_SUPPORT) {
+            return false;
+        }
+        
+        synchronized (pipelineLock) {
+            WorldRenderingPipeline currentIrisPipeline = Iris.getPipelineManager().getPipelineNullable();
+            
+            // Check if the Iris pipeline has changed
+            if (currentIrisPipeline != lastIrisPipeline) {
+                Logger.info("Iris pipeline changed, updating Voxy pipeline");
+                
+                // Free the old pipeline
+                if (this.pipeline != null) {
+                    try {
+                        this.pipeline.free();
+                    } catch (Exception e) {
+                        Logger.error("Error freeing old pipeline during update", e);
+                    }
+                }
+                
+                // Create a new pipeline
+                try {
+                    this.pipeline = RenderPipelineFactory.createPipeline(this.nodeManager, this.nodeCleaner, this.traversal, this::frexStillHasWork);
+                    if (this.pipeline != null) {
+                        this.pipeline.setupExtraModelBakeryData(this.modelService);
+                        
+                        // Recreate section renderer with new pipeline
+                        var backendFactory = getRenderBackendFactory();
+                        var sectionRenderer = backendFactory.create(this.pipeline, this.modelService.getStore(), this.geometryData);
+                        this.pipeline.setSectionRenderer(sectionRenderer);
+                        
+                        // Update viewport selector
+                        this.viewportSelector.free();
+                        this.viewportSelector = new ViewportSelector<>(sectionRenderer::createViewport);
+                        
+                        // Update chunk bound renderer
+                        this.chunkBoundRenderer.free();
+                        this.chunkBoundRenderer = new ChunkBoundRenderer(this.pipeline);
+                        
+                        lastIrisPipeline = currentIrisPipeline;
+                        Logger.info("Voxy pipeline updated successfully");
+                        return true;
+                    }
+                } catch (Exception e) {
+                    Logger.error("Failed to create new pipeline during update", e);
+                    // Try to create a fallback pipeline
+                    try {
+                        this.pipeline = new NormalRenderPipeline(this.nodeManager, this.nodeCleaner, this.traversal, this::frexStillHasWork);
+                        this.pipeline.setupExtraModelBakeryData(this.modelService);
+                        var backendFactory = getRenderBackendFactory();
+                        var sectionRenderer = backendFactory.create(this.pipeline, this.modelService.getStore(), this.geometryData);
+                        this.pipeline.setSectionRenderer(sectionRenderer);
+                        this.viewportSelector.free();
+                        this.viewportSelector = new ViewportSelector<>(sectionRenderer::createViewport);
+                        this.chunkBoundRenderer.free();
+                        this.chunkBoundRenderer = new ChunkBoundRenderer(this.pipeline);
+                        lastIrisPipeline = currentIrisPipeline;
+                    } catch (Exception ex) {
+                        Logger.error("Failed to create fallback pipeline", ex);
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     public void renderOpaque(Viewport<?> viewport) {
         if (viewport == null) {
             return;
         }
+
+        // Check for pipeline changes before rendering
+        checkAndUpdatePipeline();
         if (viewport.width <= 0 || viewport.height <= 0) {
             return;//Only render on valid viewport
         }
@@ -504,16 +583,20 @@ public class VoxyRenderSystem {
             this.traversal.free();
             this.nodeCleaner.free();
             this.geometryData.free();
-            if (((BasicSectionGeometryData)this.geometryData).isExternalGeometryBuffer) {
+            if (this.chunkBoundRenderer != null) {
+                if (((BasicSectionGeometryData)this.geometryData).isExternalGeometryBuffer) {
                 RenderResourceReuse.giveBackGeometryBuffer(((BasicSectionGeometryData)this.geometryData).getGeometryBuffer());
             }
 
             this.chunkBoundRenderer.free();
+            }
 
-            this.viewportSelector.free();
+            if (this.viewportSelector != null) {
+                this.viewportSelector.free();
+            }
         } catch (Exception e) {Logger.error("Error shutting down renderer components", e);}
         Logger.info("Shutting down render pipeline");
-        try {this.pipeline.free();} catch (Exception e){Logger.error("Error releasing render pipeline", e);}
+        try {if (this.pipeline != null) this.pipeline.free();} catch (Exception e){Logger.error("Error releasing render pipeline", e);}
 
 
 
