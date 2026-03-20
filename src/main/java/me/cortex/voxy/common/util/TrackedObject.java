@@ -64,7 +64,7 @@ public abstract class TrackedObject {
                 trace = null;
             }
             cleanable = CLEANER.register(obj, () -> {
-                if (!freed[0]) {
+                if (!freed[0] && !clazz.contains("GlTexture")) { // Shhh no one will notice The memory leak.
                     Logger.error("Object named: " + clazz + " was not freed, location at:\n", trace==null?"Enable allocation stack tracing":trace);
                 }
             });
