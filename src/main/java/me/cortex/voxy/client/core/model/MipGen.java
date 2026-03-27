@@ -1,6 +1,7 @@
 package me.cortex.voxy.client.core.model;
 
-import it.unimi.dsi.fastutil.bytes.ByteArrayFIFOQueue;
+import java.util.LinkedList;
+import java.util.Queue;
 import me.cortex.voxy.common.util.MemoryBuffer;
 import org.lwjgl.system.MemoryUtil;
 
@@ -14,7 +15,7 @@ public class MipGen {
         if (MODEL_TEXTURE_SIZE>16) throw new IllegalStateException("TODO: THIS MUST BE UPDATED, IT CURRENTLY ASSUMES 16 OR SMALLER SIZE");
     }
     private static final short[] SCRATCH = new short[MODEL_TEXTURE_SIZE*MODEL_TEXTURE_SIZE];
-    private static final ByteArrayFIFOQueue QUEUE = new ByteArrayFIFOQueue(MODEL_TEXTURE_SIZE*MODEL_TEXTURE_SIZE);
+    private static final Queue<Integer> QUEUE = new LinkedList<>();
 
     private static long getOffset(int bx, int by, int i) {
         bx += i&(MODEL_TEXTURE_SIZE-1);
@@ -35,13 +36,13 @@ public class MipGen {
                     if ((colour&0xFF000000)!=0) {
                         int pos = x+y*MODEL_TEXTURE_SIZE;
                         SCRATCH[pos] = ((short)pos);
-                        QUEUE.enqueue((byte) pos);
+                        QUEUE.add(pos);
                     }
                 }
             }
 
             while (!QUEUE.isEmpty()) {
-                int pos = Byte.toUnsignedInt(QUEUE.dequeueByte());
+                int pos = QUEUE.poll();
                 int x = pos&(MODEL_TEXTURE_SIZE-1);
                 int y = pos/MODEL_TEXTURE_SIZE;//this better be turned into a bitshift
                 short newVal = (short) (SCRATCH[pos]+(short) 0x0100);
@@ -53,7 +54,7 @@ public class MipGen {
                     int pos2 = x2+y2*MODEL_TEXTURE_SIZE;
                     if ((newVal&0xFF00)<(SCRATCH[pos2]&0xFF00)) {
                         SCRATCH[pos2] = newVal;
-                        QUEUE.enqueue((byte) pos2);
+                        QUEUE.add(pos2);
                     }
                 }
             }
