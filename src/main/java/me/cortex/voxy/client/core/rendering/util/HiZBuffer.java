@@ -10,6 +10,11 @@ import org.lwjgl.opengl.GL11;
 import static org.lwjgl.opengl.ARBDirectStateAccess.*;
 import static org.lwjgl.opengl.ARBShaderImageLoadStore.GL_TEXTURE_FETCH_BARRIER_BIT;
 import static org.lwjgl.opengl.GL11C.*;
+import static org.lwjgl.opengl.GL12C.GL_CLAMP_TO_EDGE;
+import static org.lwjgl.opengl.GL12C.GL_TEXTURE_BASE_LEVEL;
+import static org.lwjgl.opengl.GL12C.GL_TEXTURE_MAX_LEVEL;
+import static org.lwjgl.opengl.GL14C.GL_TEXTURE_COMPARE_MODE;
+import static org.lwjgl.opengl.GL20C.glUniform1i;
 import static org.lwjgl.opengl.GL30C.*;
 import static org.lwjgl.opengl.GL33.glBindSampler;
 import static org.lwjgl.opengl.GL33.glGenSamplers;
@@ -42,7 +47,10 @@ public class HiZBuffer {
     }
 
     private void alloc(int width, int height) {
-        this.levels = (int)Math.ceil(Math.log(Math.max(width, height))/Math.log(2));
+    width = Math.max(1, width);
+    height = Math.max(1, height);
+
+        this.levels = Math.max(1, (int)Math.ceil(Math.log(Math.max(width, height))/Math.log(2)));
         //We dont care about e.g. 1x1 size texture since you dont get meshlets that big to cover such a large area
         //this.levels -= 1;//Arbitrary size, shinks the max level by alot and saves a significant amount of processing time
         // (could probably increase it to be defined by a max meshlet coverage computation thing)
