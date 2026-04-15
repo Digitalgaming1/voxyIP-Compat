@@ -95,7 +95,7 @@ public class ChunkBoundRenderer {
             this.remQueue.forEach(this::_remPos);//TODO: REPLACE WITH SCATTER COMPUTE
             this.remQueue.clear();
             if (this.chunk2idx.isEmpty()&&!wasEmpty) {//When going from stuff to nothing need to clear the depth buffer
-                viewport.depthBoundingBuffer.clear(0);
+                viewport.depthBoundingBuffer.clear(this.properties.inverseClearDepth());
             }
         }
 
@@ -107,7 +107,7 @@ public class ChunkBoundRenderer {
 
         if (this.chunk2idx.isEmpty()) return;
 
-        viewport.depthBoundingBuffer.clear(0);
+        viewport.depthBoundingBuffer.clear(this.properties.inverseClearDepth());
 
         long ptr = UploadStream.INSTANCE.upload(this.uniformBuffer, 0, 128);
         long matPtr = ptr; ptr += 4*4*4;
