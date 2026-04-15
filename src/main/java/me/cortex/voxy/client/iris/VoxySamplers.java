@@ -22,7 +22,7 @@ public class VoxySamplers {
 
             //Access the current pipeline through the VoxyRenderSystem
             samplers.addDynamicSampler(TextureType.TEXTURE_2D, () -> {
-                var voxyRenderSystem = ((IGetVoxyRenderSystem) Minecraft.getInstance().levelRenderer).getVoxyRenderSystem();
+                var voxyRenderSystem = ((IGetVoxyRenderSystem) Minecraft.getInstance().levelRenderer).voxy$getRenderSystem();
                 if (voxyRenderSystem == null) {
                     return 0;
                 }
@@ -41,7 +41,7 @@ public class VoxySamplers {
             }, new GlSampler(false, true, false, false), opaqueNames);
 
             samplers.addDynamicSampler(TextureType.TEXTURE_2D, () -> {
-                var voxyRenderSystem = ((IGetVoxyRenderSystem) Minecraft.getInstance().levelRenderer).getVoxyRenderSystem();
+                var voxyRenderSystem = ((IGetVoxyRenderSystem) Minecraft.getInstance().levelRenderer).voxy$getRenderSystem();
                 if (voxyRenderSystem == null) {
                     return 0;
                 }
