@@ -3,6 +3,7 @@ package me.cortex.voxy.client.core.rendering;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import me.cortex.voxy.client.core.AbstractRenderPipeline;
+import me.cortex.voxy.client.core.RenderProperties;
 import me.cortex.voxy.client.core.gl.GlBuffer;
 import me.cortex.voxy.client.core.gl.GlVertexArray;
 import me.cortex.voxy.client.core.gl.shader.AutoBindingShader;
@@ -46,6 +47,7 @@ public class ChunkBoundRenderer {
     private final Long2IntOpenHashMap chunk2idx = new Long2IntOpenHashMap(INIT_MAX_CHUNK_COUNT);
     private long[] idx2chunk = new long[INIT_MAX_CHUNK_COUNT];
     private final Shader rasterShader;
+    private final RenderProperties properties;
 
     private final LongOpenHashSet addQueue = new LongOpenHashSet();
     private final LongOpenHashSet remQueue = new LongOpenHashSet();
@@ -53,6 +55,7 @@ public class ChunkBoundRenderer {
     private final AbstractRenderPipeline pipeline;
     public ChunkBoundRenderer(AbstractRenderPipeline pipeline) {
         this.chunk2idx.defaultReturnValue(-1);
+        this.properties = pipeline.properties;
 
         String vert = ShaderLoader.parse("voxy:chunkoutline/outline.vsh");
         String taa = pipeline.taaFunction("getTAA");
@@ -67,6 +70,7 @@ public class ChunkBoundRenderer {
                 .addSource(ShaderType.VERTEX, vert)
                 .defineIf("TAA", taa != null)
                 .add(ShaderType.FRAGMENT, "voxy:chunkoutline/outline.fsh")
+                .apply(this.properties::apply)
                 .compile()
                 .ubo(0, this.uniformBuffer)
                 .ssbo(1, this.chunkPosBuffer);
@@ -139,7 +143,7 @@ public class ChunkBoundRenderer {
             //"reverse depth buffer" it goes from 0->1 where 1 is far away
             glEnable(GL_CULL_FACE);
             glEnable(GL_DEPTH_TEST);
-            glDepthFunc(GL_GREATER);
+            glDepthFunc(this.properties.furtherDepthCompare());
         }
 
         glBindVertexArray(GlVertexArray.STATIC_VAO);
@@ -160,7 +164,7 @@ public class ChunkBoundRenderer {
         {
             glFrontFace(GL_CCW);//Restore winding order
 
-            glDepthFunc(GL_LEQUAL);
+            glDepthFunc(this.properties.closerEqualDepthCompare());
 
             //TODO: check this is correct
             glEnable(GL_CULL_FACE);
