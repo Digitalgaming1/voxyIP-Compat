@@ -2,8 +2,6 @@ package me.cortex.voxy.client.core;
 
 import com.mojang.blaze3d.platform.GlConst;
 import com.mojang.blaze3d.platform.GlStateManager;
-import com.mojang.blaze3d.pipeline.DepthStencilState;
-import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.systems.RenderSystem;
 import me.cortex.voxy.client.TimingStatistics;
 import me.cortex.voxy.client.VoxyClient;
@@ -422,20 +420,12 @@ public class VoxyRenderSystem {
     }*/
 
     private static Matrix4f computeProjectionMat(RenderProperties properties, Matrix4fc base) {
-
         var proj = new Matrix4f(base);
 
         float near = getRenderDistance()<=32.0f?8f:16f;
         near = VoxyClient.disableSodiumChunkRender()?0.1f:near;
 
         float far = 16*3000;
-
-        /* jank way of just modifying the base raw
-        if (true) {
-            return new Matrix4f(base)
-                    .m22((far + near) / (near - far))
-                    .m32((far+far) * near / (near - far));
-        }*/
 
         //Flip near and far on reverse depth
         if (properties.isReverseZ()) {
@@ -444,11 +434,9 @@ public class VoxyRenderSystem {
             far = tmp;
         }
 
-        return extraProjection.mulLocal(
-                new Matrix4f(rawMCProj)
+        return proj
                 .m22((properties.isZero2One()?far:(far+near)) / (near - far))
-                .m32((properties.isZero2One()?far:(far+far)) * near / (near - far))
-        );
+                .m32((properties.isZero2One()?far:(far+far)) * near / (near - far));
     }
 
     private boolean frexStillHasWork() {

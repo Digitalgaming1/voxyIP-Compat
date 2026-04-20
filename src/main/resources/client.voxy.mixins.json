@@ -29,7 +29,7 @@
     "minecraft.MixinMinecraft",
     "minecraft.MixinRenderSystem",
     "minecraft.MixinStairBlock",
-    "minecraft.MixinGPUSelect",
+    "minecraft.MixinWindow",
     "nvidium.MixinRenderPipeline",
     "sodium.AccessorChunkTracker",
     "sodium.AccessorSodiumOptionsGUI",

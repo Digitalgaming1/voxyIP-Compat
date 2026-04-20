@@ -1,8 +1,7 @@
 package me.cortex.voxy.client.core;
 
-import com.mojang.blaze3d.pipeline.DepthStencilState;
-import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.systems.RenderSystem;
+import org.lwjgl.opengl.GL11;
 import me.cortex.voxy.client.core.gl.shader.Shader;
 import me.cortex.voxy.client.core.util.IrisUtil;
 import me.cortex.voxy.client.iris.IGetIrisVoxyPipelineData;
@@ -60,9 +59,10 @@ public record RenderProperties(boolean isZero2One, boolean isReverseZ, boolean u
     }
 
     public static RenderProperties getRenderProperties() {
+        boolean isZeroToOne = GL11.glGetInteger(GL11.GL_DEPTH_FUNC) == GL_GEQUAL;
         RenderProperties properties = new RenderProperties(
-                RenderSystem.getDevice().isZZeroToOne(),
-                DepthStencilState.DEFAULT.depthTest().equals(CompareOp.GREATER_THAN_OR_EQUAL),
+                isZeroToOne,
+                GL11.glGetInteger(GL11.GL_DEPTH_FUNC) == GL_GEQUAL,
                 false);
 
         if (IrisUtil.IRIS_INSTALLED && IrisUtil.SHADER_SUPPORT) {
