@@ -3,10 +3,12 @@ package me.cortex.voxy.client.config;
 import com.google.common.collect.ImmutableList;
 import me.cortex.voxy.client.ClientSessionEvents;
 import me.cortex.voxy.client.core.IGetVoxyRenderSystem;
+import me.cortex.voxy.client.core.SSAO;
 import me.cortex.voxy.client.core.util.IrisUtil;
 import me.cortex.voxy.common.util.cpu.CpuLayout;
 import me.cortex.voxy.commonImpl.VoxyCommon;
 import net.caffeinemc.mods.sodium.client.gui.options.*;
+import net.caffeinemc.mods.sodium.client.gui.options.control.CyclingControl;
 import net.caffeinemc.mods.sodium.client.gui.options.control.SliderControl;
 import net.caffeinemc.mods.sodium.client.gui.options.control.TickBoxControl;
 import net.minecraft.client.Minecraft;
@@ -16,6 +18,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 public abstract class VoxyConfigScreenPages {
+    private static final Component[] SSAO_MODE_LABELS = {
+            Component.translatable("voxy.config.general.ssao_mode.auto"),
+            Component.translatable("voxy.config.general.ssao_mode.basic"),
+            Component.translatable("voxy.config.general.ssao_mode.better"),
+            Component.translatable("voxy.config.general.ssao_mode.best")
+    };
+
     private VoxyConfigScreenPages(){}
 
     public static OptionPage voxyOptionPage = null;
@@ -143,17 +152,80 @@ public abstract class VoxyConfigScreenPages {
                 ).build()
         );
 
+        OptionImpl<VoxyConfig, Boolean> adaptCloudDistanceOption = OptionImpl.createBuilder(boolean.class, storage)
+                .setName(Component.literal("Adapt cloud distance"))
+                .setTooltip(Component.literal("Extends the cloud distance according to the current render distance. It's automatically capped at 256"))
+                .setControl(TickBoxControl::new)
+                .setBinding((s, v) -> s.adaptCloudDistance = v, s -> s.adaptCloudDistance)
+                .setImpact(OptionImpact.LOW)
+                .build();
+
         groups.add(OptionGroup.createBuilder()
                 .add(OptionImpl.createBuilder(boolean.class, storage)
                         .setName(Component.translatable("voxy.config.general.render_fog"))
                         .setTooltip(Component.translatable("voxy.config.general.render_fog.tooltip"))
                         .setControl(TickBoxControl::new)
-                        .setBinding((s, v)-> s.renderVanillaFog = v, s -> s.renderVanillaFog)
+                        .setBinding((s, v) -> s.renderVoxyFog = v, s -> s.renderVoxyFog)
+                        .setImpact(OptionImpact.LOW)
+                        .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
+                        .build()
+                ).add(OptionImpl.createBuilder(int.class, storage)
+                    .setName(Component.literal("Sky fog distance"))
+                    .setTooltip(Component.literal("Higher distance, sharper sky fog"))
+                    .setControl(opt -> new SliderControl(opt, 16, 512, 16, v -> Component.literal(Integer.toString(v))))
+                    .setBinding((s, v) -> s.skyFogDistance = v, s -> s.skyFogDistance)
+                    .build()
+                ).add(OptionImpl.createBuilder(int.class, storage)
+                    .setName(Component.literal("Fog intensity"))
+                    .setTooltip(Component.literal("Multiplier for terrain fog opacity. 0.0 = off, 1.0 = vanilla, 3.0 = triple"))
+                    .setControl(opt -> new SliderControl(opt, 0, 300, 10, v -> Component.literal(String.format("%.1f", v / 100.0f))))
+                    .setBinding((s, v) -> s.fogIntensity = v / 100.0f, s -> (int)(s.fogIntensity * 100))
+                    .build()
+                ).add(OptionImpl.createBuilder(int.class, storage)
+                    .setName(Component.literal("Fog curve"))
+                    .setTooltip(Component.literal("Shape of the fog curve. 0.0 = linear, higher values push fog towards the far end"))
+                    .setControl(opt -> new SliderControl(opt, 0, 50, 1, v -> Component.literal(String.format("%.1f", v / 10.0f))))
+                    .setBinding((s, v) -> s.fogDensity = v / 10.0f, s -> (int)(s.fogDensity * 10))
+                    .build()
+                ).add(adaptCloudDistanceOption).add(OptionImpl.createBuilder(int.class, storage)
+                        .setName(Component.literal("Cloud distance"))
+                        .setTooltip(Component.literal("Cloud render distance in chunks"))
+                        .setEnabled(() -> !adaptCloudDistanceOption.getValue())
+                        .setControl(opt -> new SliderControl(opt, 0, 2048, 2, v -> {
+                            if (adaptCloudDistanceOption.getValue())
+                                return Component.literal("Adaptive");
+                            return Component.literal(v < 1 ? "Default" : Integer.toString(v));
+                        }))
+                        .setBinding((s, v) -> s.cloudDistance = v, s -> s.cloudDistance)
+                        .setImpact(OptionImpact.VARIES)
+                        .build()
+                ).add(OptionImpl.createBuilder(SSAO.SSAOMode.class, storage)
+                        .setName(Component.translatable("voxy.config.general.ssao_mode"))
+                        .setTooltip(Component.translatable("voxy.config.general.ssao_mode.tooltip"))
+                        .setControl(opt -> new CyclingControl<>(opt, SSAO.SSAOMode.class, SSAO_MODE_LABELS))
+                        .setBinding((s, v) -> {
+                            s.setSSAOMode(v);
+                            reloadActiveRenderer();
+                        }, VoxyConfig::getSSAOMode)
+                        .setImpact(OptionImpact.HIGH)
                         .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
                         .build()
                 ).build()
         );
         return new OptionPage(Component.translatable("voxy.config.title"), ImmutableList.copyOf(groups));
+    }
+
+    private static void reloadActiveRenderer() {
+        try {
+            var minecraft = Minecraft.getInstance();
+            var renderer = (IGetVoxyRenderSystem) minecraft.levelRenderer;
+            if (renderer != null && minecraft.level != null && VoxyConfig.CONFIG.isRenderingEnabled()) {
+                renderer.voxy$shutdownRenderer();
+                renderer.voxy$createRenderer();
+            }
+        } catch (Throwable ignored) {}
+
+        try { IrisUtil.reload(); } catch (Throwable ignored) {}
     }
 
     private static final int SUBDIV_IN_MAX = 100;
