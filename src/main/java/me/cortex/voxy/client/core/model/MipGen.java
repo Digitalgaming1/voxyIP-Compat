@@ -1,6 +1,6 @@
 package me.cortex.voxy.client.core.model;
 
-import java.util.ArrayDeque;
+import it.unimi.dsi.fastutil.bytes.ByteArrayFIFOQueue;
 import me.cortex.voxy.common.util.MemoryBuffer;
 import org.lwjgl.system.MemoryUtil;
 
@@ -14,7 +14,7 @@ public class MipGen {
         if (MODEL_TEXTURE_SIZE>16) throw new IllegalStateException("TODO: THIS MUST BE UPDATED, IT CURRENTLY ASSUMES 16 OR SMALLER SIZE");
     }
     private static final short[] SCRATCH = new short[MODEL_TEXTURE_SIZE*MODEL_TEXTURE_SIZE];
-private static final ArrayDeque<Integer> QUEUE = new ArrayDeque<>(MODEL_TEXTURE_SIZE*MODEL_TEXTURE_SIZE);
+    private static final ByteArrayFIFOQueue QUEUE = new ByteArrayFIFOQueue(MODEL_TEXTURE_SIZE*MODEL_TEXTURE_SIZE);
 
     private static long getOffset(int bx, int by, int i) {
         bx += i&(MODEL_TEXTURE_SIZE-1);
@@ -35,27 +35,25 @@ private static final ArrayDeque<Integer> QUEUE = new ArrayDeque<>(MODEL_TEXTURE_
                     if ((colour&0xFF000000)!=0) {
                         int pos = x+y*MODEL_TEXTURE_SIZE;
                         SCRATCH[pos] = ((short)pos);
-QUEUE.addLast(pos);
+                        QUEUE.enqueue((byte) pos);
                     }
                 }
             }
 
             while (!QUEUE.isEmpty()) {
-                Integer posObj = QUEUE.pollFirst();
-                if (posObj == null) continue;
-                int pos = posObj;
-                int x = pos & (MODEL_TEXTURE_SIZE - 1);
-                int y = pos / MODEL_TEXTURE_SIZE; // this better be turned into a bitshift
-                short newVal = (short) (SCRATCH[pos] + (short) 0x0100);
-                for (int D = 3; D != -1; D--) {
-                    int d = 2 * (D & 1) - 1;
-                    int x2 = x + (((D & 2) == 2) ? d : 0);
-                    int y2 = y + (((D & 2) == 0) ? d : 0);
-                    if (x2 < 0 || x2 >= MODEL_TEXTURE_SIZE || y2 < 0 || y2 >= MODEL_TEXTURE_SIZE) continue;
-                    int pos2 = x2 + y2 * MODEL_TEXTURE_SIZE;
-                    if ((newVal & 0xFF00) < (SCRATCH[pos2] & 0xFF00)) {
+                int pos = Byte.toUnsignedInt(QUEUE.dequeueByte());
+                int x = pos&(MODEL_TEXTURE_SIZE-1);
+                int y = pos/MODEL_TEXTURE_SIZE;//this better be turned into a bitshift
+                short newVal = (short) (SCRATCH[pos]+(short) 0x0100);
+                for (int D = 3; D!=-1; D--) {
+                    int d = 2*(D&1)-1;
+                    int x2 = x+(((D&2)==2)?d:0);
+                    int y2 = y+(((D&2)==0)?d:0);
+                    if (x2<0||x2>=MODEL_TEXTURE_SIZE||y2<0||y2>=MODEL_TEXTURE_SIZE) continue;
+                    int pos2 = x2+y2*MODEL_TEXTURE_SIZE;
+                    if ((newVal&0xFF00)<(SCRATCH[pos2]&0xFF00)) {
                         SCRATCH[pos2] = newVal;
-QUEUE.addLast(pos2);
+                        QUEUE.enqueue((byte) pos2);
                     }
                 }
             }
