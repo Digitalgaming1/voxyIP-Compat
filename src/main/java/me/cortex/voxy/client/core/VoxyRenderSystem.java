@@ -352,7 +352,10 @@ public class VoxyRenderSystem {
         //var target = DefaultTerrainRenderPasses.CUTOUT.getTarget();
         //boundFB = ((net.minecraft.client.texture.GlTexture) target.getColorAttachment()).getOrCreateFramebuffer(((GlBackend) RenderSystem.getDevice()).getFramebufferManager(), target.getDepthAttachment());
         if (boundFB == 0) {
-            throw new IllegalStateException("Cannot use the default framebuffer as cannot source from it");
+            //When rendering with Immersive Portals, the default framebuffer may be bound
+            //for the main world. Fall back to Voxy's own framebuffer as the source.
+            Logger.warn("Default framebuffer bound, falling back to Voxy's own framebuffer as source");
+            boundFB = this.pipeline.fb.framebuffer.id;
         }
 
         //this.autoBalanceSubDivSize();
